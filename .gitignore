@@ -2,3 +2,21 @@ soynet-env
 data/raw
 .pth
 runs
+env
+data
+.pth
+runs
+processa_soja
+processa_soja/1_IMAGENS_ORIGINAIS/
+processa_soja/2_IMAGENS_TRATADAS/
+processa_soja/3_GRAOS_RECORTADOS/
+processa_soja/4_OUTLIERS/
+processa_soja/5_GRAO_REFERENCIA/
+processa_soja/arquivos/
+models/*.pth
+*.pth
+
+# Caches / Builds
+__pycache__/
+*.pyc
+runs/
