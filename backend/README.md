@@ -1,0 +1,38 @@
+# Backend (FastAPI)
+
+Este diretório contém a API de inferência usada pelo site.
+
+## Estrutura
+
+- `main.py`: inicializa o `FastAPI`, configura CORS e expõe os endpoints (`/inferencia`, `/home`).
+- `routes/`: rotas opcionais e testes de inferência (não usado diretamente no fluxo atual).
+  - `inference_routes.py`: exemplo de rota e código auxiliar para teste com EfficientNet.
+- `schemas/`: modelos de dados da API (Pydantic).
+  - `inference_schema.py`: esquemas específicos de inferência.
+- `schemas.py`: esquemas principais retornados/recebidos pela API (`InferenceRequest`, `InferenceResponse`).
+- `services/`: camada de serviço que contém a lógica de negócio.
+  - `inference_service.py`: ponto de entrada para rodar a inferência a partir dos bytes do arquivo.
+- `documentation.txt`: notas internas de arquitetura e testes.
+
+## Como executar
+
+1. Instale dependências (usar o ambiente virtual do projeto):
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Suba o servidor de desenvolvimento:
+
+```bash
+uvicorn backend.main:app --reload
+```
+
+3. Endpoints:
+- `POST /inferencia`: recebe `model_name` e arquivos de imagem (multipart/form-data)
+- `GET /home`: verificação de saúde da API
+
+## Convenções
+- Importações internas devem usar o prefixo `backend.` (ex.: `from backend.services.inference_service import run_inference`).
+- Evite acessar modelos diretamente nas rotas: sempre passe pela camada `services/`.
+- `schemas.py` define contratos claros para entrada/saída.

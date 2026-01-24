@@ -26,11 +26,11 @@ processa_soja/5_GRAO_REFERENCIA/
 processa_soja/arquivos/
 
 # Frontend
-front-end/node_modules/
-front-end/dist/
-front-end/build/
-front-end/.vite/
-front-end/package-lock.json
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/package-lock.json
 
 # IDE
 .vscode/

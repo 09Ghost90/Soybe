@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
-from app.schemas import InferenceResponse
-from app.services.inference import run_inference
+from backend.schemas import InferenceResponse
+from backend.services.inference_service import run_inference
 
 app = FastAPI()
 
