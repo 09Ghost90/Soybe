@@ -1,0 +1,44 @@
+# Python environment
+soynet-env
+env/
+venv/
+*.pyc
+__pycache__/
+
+# Data files
+data/raw
+data/processed/
+
+# Model checkpoints
+models/*.pth
+*.pth
+
+# Training logs
+runs/
+*.log
+
+# Processing folders
+processa_soja/1_IMAGENS_ORIGINAIS/
+processa_soja/2_IMAGENS_TRATADAS/
+processa_soja/3_GRAOS_RECORTADOS/
+processa_soja/4_OUTLIERS/
+processa_soja/5_GRAO_REFERENCIA/
+processa_soja/arquivos/
+
+# Frontend
+front-end/node_modules/
+front-end/dist/
+front-end/build/
+front-end/.vite/
+front-end/package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
