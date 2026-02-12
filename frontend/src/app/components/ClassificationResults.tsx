@@ -3,9 +3,19 @@ import { Badge } from "./ui/badge";
 import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
 import { Progress } from "./ui/progress";
 
+/*
+Estrutura
+
+Backend resposta bruta
+       ↓
+App.tsx (transforma)
+       ↓
+ClassificationResults (exibe)
+*/
+
 export interface ClassificationResult {
   filename: string;
-  imageUrl: string;
+  imageUrl: string;        // cria isso em App com URL.createObjectURL()
   classification: string;
   confidence: number;
   details: {
@@ -23,8 +33,6 @@ export function ClassificationResults({ results }: ClassificationResultsProps) {
   if (results.length === 0) {
     return null;
   }
-
-// Corrigir função retornar a classe e não a cor diretamente
 
   const getQualityColor = (quality: string) => {
     switch (quality) {

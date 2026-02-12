@@ -2,11 +2,14 @@ import { useRef } from "react";
 import { Button } from "./ui/button";
 import { UploadIcon } from "lucide-react";
 
+// Recebe o modo de entrada e as imagens selecionadas
+
 interface FileUploaderProps {
   mode: "single" | "batch";
   onFilesSelected: (files: FileList) => void;
 }
 
+// Componente para upload de arquivos, pode ser usado para selecionar uma única imagem ou uma pasta inteira, dependendo do modo
 export function FileUploader({ mode, onFilesSelected }: FileUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -20,6 +23,7 @@ export function FileUploader({ mode, onFilesSelected }: FileUploaderProps) {
     }
   };
 
+  // Frontend p/ selecionar arquivos ou pastas, dependendo do modo
   return (
     <div>
       <input

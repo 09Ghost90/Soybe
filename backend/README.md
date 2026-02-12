@@ -28,8 +28,12 @@ pip install -r requirements.txt
 uvicorn backend.main:app --reload
 ```
 
+```
+PYTHONPATH=. uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
+```
+
 3. Endpoints:
-- `POST /inferencia`: recebe `model_name` e arquivos de imagem (multipart/form-data)
+- `POST /inferencia`: recebe `model_name` e arquivos de imagem (multipart/form-data) em bytes.
 - `GET /home`: verificação de saúde da API
 
 ## Convenções

@@ -2,6 +2,9 @@ import { Label } from "./ui/label";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { ImageIcon, FolderIcon } from "lucide-react";
 
+// Modo de entrada: "Single" imagem única ou "Batch" pasta com múltiplas imagens
+
+// Interface
 interface InputModeSelectorProps {
   value: "single" | "batch";
   onChange: (value: "single" | "batch") => void;

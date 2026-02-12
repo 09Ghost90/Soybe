@@ -1,8 +1,11 @@
+import os
+import re
 from fastapi import FastAPI, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 from backend.schemas import InferenceResponse
 from backend.services.inference_service import run_inference
+from starlette.requests import Request
 
 app = FastAPI()
 
@@ -18,31 +21,43 @@ app.add_middleware(
 async def options_inferencia():
     return Response(status_code=200)
 
+# Endpoint de inferência (POST)
 @app.post("/inferencia", response_model=List[InferenceResponse])
 async def inferencia(
+    request: Request,
     model_name: str = Form(...),
     files: List[UploadFile] = File(...)
 ):
     results = []
-    
 
-    for f in files:
-        contents = await f.read()  # bytes do arquivo
+    for index, f in enumerate(files):
+        if await request.is_disconnected():
+            print("Requisição abortada pelo cliente.")
+            break
 
-        # TODO: aqui você vai chamar o modelo futuramente
-        
-        # De forma dinamica futuramente carrega o modelo baseado no model_name e passa os bytes para inferência
-        
-        # Endpoint chama service (função de inferência). Service nunca conhece Endpoint        
+        contents = await f.read()
         prediction = run_inference(model_name, contents)
 
+        # Lista de resultados para cada imagem enviada
         results.append({
+            "index": index,
             "filename": f.filename,
+            "confidence": prediction["confidence"],
             "classification": prediction["label"],
             "model_used": prediction["model_name"],
         })
 
+        print(f"[{index + 1}] { f.filename} → {prediction['label']} ({prediction['confidence']:.4f})")
+
         await f.close()
+ 
+    # Ordena por número no nome do arquivo (ex: "Broken-32/997.jpg" → 997)
+    def extract_number(filename: str) -> int:
+        base = os.path.basename(filename)
+        match = re.search(r"\d+", base)
+        return int(match.group()) if match else -1
+
+    results.sort(key=lambda r: extract_number(r["filename"]))
 
     return results
 

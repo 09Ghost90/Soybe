@@ -1,6 +1,8 @@
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
+// Envia para o Backend o modelo selecionado
+
 interface ModelSelectorProps {
   value: string;
   onChange: (value: string) => void;
@@ -8,13 +10,11 @@ interface ModelSelectorProps {
 
 export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const models = [
-    // Exemplo de modelos treinados disponíveis
-    // Retornar o modelo
     { id: "EfficientNetB0", name: "EfficientNet-B0 (Precisão: 93.1%)" },
   ];
 
+  // Implementação de envio é feita no ModelPipeline.tsx [HandleClassify] -> chamada pela App.tsx
 
-  // Retorna a string do modelo selecionado
   return (
     <div className="space-y-2">
       <Label htmlFor="model-select">Modelo Treinado</Label>

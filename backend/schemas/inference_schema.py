@@ -1,1 +1,0 @@
-#Pydantic (entrada/saída)

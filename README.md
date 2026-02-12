@@ -1,85 +1,592 @@
-﻿# SoyNet  Site com Backend (FastAPI) e Frontend (React)
+﻿# 🌱 SoyNet - Sistema de Classificação de Grãos de Soja
 
-Projeto para classificação de grãos de soja com API de inferência em Python (FastAPI) e interface web em React/TypeScript.
+Sistema web completo para classificação automatizada de grãos de soja utilizando modelos de inteligência artificial. Combina uma API robusta em **FastAPI** (Python) com uma interface moderna em **React/TypeScript**.
 
-## Visão Geral
-- Backend: ackend/ (FastAPI) expõe endpoints para inferência.
-- Frontend: rontend/ (React + Vite) interface web para upload e visualização dos resultados.
-- Modelos: models/ (arquivos .pth), usados pela camada de serviços.
-- Dados: data/ (dataset processado) mantido no repositório original.
+## 📋 Visão Geral
 
-## Estrutura do Projeto
+O **SoyNet** utiliza redes neurais profundas (CNNs e EfficientNet) para classificar grãos de soja em diferentes categorias de qualidade:
 
-`
-backend/               # API (FastAPI)
-  main.py              # Inicialização do FastAPI, CORS, endpoints
-  schemas.py           # Contratos de entrada/saída (Pydantic)
-  routes/
-    inference_routes.py# Exemplo/apoio para testes (opcional)
-  services/
-    inference_service.py # Lógica de negócio de inferência
-  schemas/
-    inference_schema.py  # Esquemas específicos de inferência
+- ✅ **Soja Integral** - Alta qualidade
+- ⚠️ **Soja com Defeitos Leves** - Qualidade aceitável
+- ❌ **Soja com Defeitos Moderados** - Qualidade comprometida
+- 🚫 **Soja Quebrada/Danificada** - Rejeição
 
-frontend/              # Interface Web (React/Vite)
-  src/                 # Código da aplicação
-  package.json         # Dependências e scripts
+### Funcionalidades Principais
 
-models/                # Pesos dos modelos (.pth)
-data/                  # Dataset
-`
+- 📸 Upload de imagem única ou lote de imagens
+- 🤖 Inferência com múltiplos modelos (EfficientNet-B0, CNN customizado)
+- 📊 Resultados detalhados com confiança percentual
+- 🎯 Detecção de defeitos específicos
+- ⚡ Processamento rápido com GPU (CUDA) ou CPU
+- 🔄 API RESTful com CORS habilitado
 
-## Pré-requisitos
-- Python 3.10+ e pip
-- Node.js 18+
+---
 
-## Instalação
+## 🏗️ Arquitetura do Projeto
 
-1) Dependências do backend
+```
+SoyNet/
+├── 📁 backend/                          # API FastAPI (Python)
+│   ├── main.py                          # Inicialização FastAPI e endpoints
+│   ├── schemas.py                       # Modelos Pydantic (contrato API)
+│   ├── requirements.txt                 # Dependências Python
+│   ├── routes/
+│   │   └── inference_routes.py          # Rota de inferência (referência)
+│   ├── services/
+│   │   └── inference_service.py         # Lógica de negócio de inferência
+│   ├── network/
+│   │   └── models/                      # Modelos e arquiteturas
+│   └── README.md                        # Documentação backend
+│
+├── 📁 frontend/                         # Interface React/Vite (TypeScript)
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── App.tsx                  # Componente principal
+│   │   │   └── components/
+│   │   │       ├── ModelSelector.tsx    # Seletor de modelo
+│   │   │       ├── InputModeSelector.tsx# Seletor modo (único/lote)
+│   │   │       ├── FileUploader.tsx     # Upload de arquivos
+│   │   │       ├── FileSelector.tsx     # Gerenciador de files
+│   │   │       ├── ClassificationResults.tsx # Visualização resultados
+│   │   │       ├── ModelPipeline.tsx    # Pipeline de classificação
+│   │   │       └── ui/                  # Componentes Radix UI
+│   │   ├── styles/
+│   │   │   ├── index.css
+│   │   │   ├── tailwind.css
+│   │   │   └── theme.css
+│   │   └── main.tsx                     # Entry point React
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── README.md                        # Documentação frontend
+│
+├── 📁 src/                              # Scripts ML/Training (Python)
+│   ├── models/
+│   │   ├── model.py                     # CNN customizada
+│   │   ├── model_best.py                # Versão otimizada
+│   │   ├── model_efficientNet.py        # EfficientNet-B0
+│   │   └── inference.py                 # Inferência standalone
+│   └── visualization/
+│       └── graphic.py                   # Gráficos de métricas
+│
+├── 📁 processa_soja/                    # Pré-processamento de imagens
+│   └── processador.py                   # Script de preparação de dados
+│
+├── 📁 notebooks/                        # Experimentação e análise
+│   └── segmentation_images.py           # Segmentação de grãos
+│
+├── 📁 data/                             # Dataset
+│   └── processed/                       # Imagens processadas
+│
+├── 📁 env/                              # Ambiente virtual Python
+│
+├── requirements.txt                     # Deps Python (raiz)
+├── .vscode/                             # Configurações VS Code
+├── README.md                            # Este arquivo
+└── .gitignore
+```
 
-`powershell
+---
+
+## 🚀 Início Rápido
+
+### Pré-requisitos
+
+Antes de começar, instale:
+
+- **Python 3.10+** - [Download](https://www.python.org/downloads/)
+- **Node.js 18+** - [Download](https://nodejs.org/)
+- **pip** (gerenciador Python)
+- **npm** ou **pnpm** (gerenciador Node)
+- *(Opcional)* **Git** para clonar o repositório
+
+Verifique as instalações:
+
+```bash
+python --version    # Deve ser 3.10+
+node --version      # Deve ser 18+
+npm --version       # Deve ser 8+
+```
+
+---
+
+## 💻 Instalação Completa
+
+### 1️⃣ Clonar/Preparar o Projeto
+
+```bash
+# Se usar Git
+git clone <repositorio-url>
+cd SoyNet
+
+# Ou acesse o diretório do projeto
+cd SoyNet
+```
+
+### 2️⃣ Configurar Backend (FastAPI)
+
+```bash
+# Criar ambiente virtual Python
+python -m venv env
+
+# Ativar ambiente virtual
+# Windows:
+env\Scripts\activate
+# Linux/Mac:
+source env/bin/activate
+
+# Instalar dependências
 pip install -r requirements.txt
-`
+```
 
-2) Dependências do frontend
+### 3️⃣ Configurar Frontend (React)
 
-`powershell
+```bash
+# Acessar diretório frontend
 cd frontend
+
+# Instalar dependências
 npm install
-`
+# OU com pnpm:
+pnpm install
 
-## Como Rodar
+# Voltar ao diretório raiz
+cd ..
+```
 
-Backend (porta padrão 8000):
+---
 
-`powershell
-uvicorn backend.main:app --reload
-`
+## ⚙️ Configuração de Modelos
 
-Frontend (Vite, porta padrão 5173):
+### Baixar Pesos dos Modelos
 
-`powershell
+Os arquivos de pesos dos modelos (`.pth`) devem ser colocados em `models/`:
+
+```
+models/
+├── soybean_model_full[4].pth          # CNN customizada
+├── efficientnet_base_lr0-001_bs32.pth # EfficientNet-B0
+└── soybean_model_efficientnet.pth     # EfficientNet alternativo
+```
+
+Se os modelos não existirem, treine-os executando:
+
+```bash
+# CNN customizada
+python src/models/model.py
+
+# EfficientNet-B0
+python src/models/model_efficientNet.py
+```
+
+---
+
+## ▶️ Executando o Projeto
+
+### Terminal 1: Backend (FastAPI)
+
+```bash
+# Com ambiente virtual ativado
+uvicorn backend.main:app --reload --port 8001
+```
+
+Saída esperada:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8001
+INFO:     Application startup complete
+```
+
+Você pode acessar a documentação interativa em: **http://localhost:8001/docs**
+
+### Terminal 2: Frontend (React)
+
+```bash
 cd frontend
+
+# Com npm
 npm run dev
-`
 
-## Endpoints
+# OU com pnpm
+pnpm dev
+```
 
-- POST /inferencia
-  - Form-data: model_name (string), iles (um ou mais arquivos de imagem)
-  - Resposta: lista de objetos com ilename, classification, model_used
+Saída esperada:
+```
+VITE v6.3.5  ready in 245 ms
 
-Exemplo de chamada (PowerShell):
+➜  Local:   http://localhost:5173/
+➜  press h + enter to show help
+```
 
-`powershell
-curl -Method POST -Uri http://127.0.0.1:8000/inferencia 
-  -Form @{ model_name = 'EfficientNetB0'; files = Get-Item .\path\to\image.jpg }
-`
+Acesse a interface em: **http://localhost:5173**
 
-## Desenvolvimento
-- Convenção de imports internos: usar prefixo ackend. (ex.: ackend.services.inference_service).
-- A camada services/ concentra a regra de negócio; rotas apenas delegam.
-- Veja o guia detalhado em ackend/README.md.
+---
 
-## Licença
-Este repositório contém dados e modelos proprietários; use com cuidado e evite commitar credenciais.
+## 📖 Como Usar o Sistema
+
+### Passo 1: Abrir a Interface
+
+Acesse [http://localhost:5173](http://localhost:5173) no navegador.
+
+### Passo 2: Selecionar Modelo
+
+Na seção **"Configuração da Análise"**, escolha o modelo de IA:
+
+- **EfficientNet-B0** (recomendado) - Melhor balance entre velocidade e precisão
+
+### Passo 3: Escolher Modo de Entrada
+
+Selecione como deseja processar imagens:
+
+- **Imagem Única**: Analisa uma foto por vez
+- **Pasta com Múltiplas**: Processa lote de imagens
+
+### Passo 4: Fazer Upload
+
+Clique em **"Selecionar Imagem"** ou **"Selecionar Pasta"** e escolha os arquivos.
+
+Formatos suportados: `.jpg`, `.jpeg`, `.png`, `.bmp`
+
+### Passo 5: Iniciar Classificação
+
+Clique no botão **"Iniciar Classificação"**.
+
+O sistema irá processar e retornar resultados em segundos.
+
+### Passo 6: Visualizar Resultados
+
+Para cada imagem, você verá:
+
+| Campo | Descrição |
+|-------|-----------|
+| **Preview** | Miniatura da imagem processada |
+| **Classificação** | Tipo e qualidade do grão |
+| **Confiança** | Porcentagem de certeza (0-100%) |
+| **Categoria** | Tipo de grão (Tipo 1, 2, 3, 4) |
+| **Qualidade** | Excelente / Boa / Regular / Ruim |
+| **Defeitos** | Lista de problemas detectados |
+
+---
+
+## 🔌 Estrutura da API
+
+### Endpoint Principal: POST /inferencia
+
+**URL:** `http://localhost:8001/inferencia`
+
+**Tipo:** POST (multipart/form-data)
+
+**Parâmetros:**
+
+```
+model_name: string   # Nome do modelo ("EfficientNetB0")
+files: file[]        # Uma ou mais imagens
+```
+
+**Resposta Sucesso (200):**
+
+```json
+[
+  {
+    "filename": "imagem1.jpg",
+    "classification": "Soja Integral de Alta Qualidade",
+    "model_used": "EfficientNetB0",
+    "confidence": 95,
+    "details": {
+      "category": "Grão Tipo 1",
+      "quality": "Excelente",
+      "defects": []
+    }
+  },
+  {
+    "filename": "imagem2.jpg",
+    "classification": "Soja com Defeitos Leves",
+    "model_used": "EfficientNetB0",
+    "confidence": 87,
+    "details": {
+      "category": "Grão Tipo 2",
+      "quality": "Boa",
+      "defects": ["Manchas leves"]
+    }
+  }
+]
+```
+
+**Exemplos de Uso:**
+
+#### Com cURL (Windows PowerShell):
+
+```powershell
+$filePath = "C:\caminho\imagem.jpg"
+curl -Method POST `
+  -Uri "http://127.0.0.1:8001/inferencia" `
+  -Form @{ 
+    model_name = "EfficientNetB0"
+    files = Get-Item $filePath 
+  }
+```
+
+#### Com Python:
+
+```python
+import requests
+
+url = "http://127.0.0.1:8001/inferencia"
+
+with open("imagem.jpg", "rb") as f:
+    files = {"files": f}
+    data = {"model_name": "EfficientNetB0"}
+    
+    response = requests.post(url, files=files, data=data)
+    print(response.json())
+```
+
+#### Com JavaScript/Fetch:
+
+```javascript
+const formData = new FormData();
+formData.append("model_name", "EfficientNetB0");
+formData.append("files", fileInput.files[0]);
+
+const response = await fetch("http://localhost:8001/inferencia", {
+  method: "POST",
+  body: formData
+});
+
+const results = await response.json();
+console.log(results);
+```
+
+### Endpoint de Saúde: GET /home
+
+**URL:** `http://localhost:8001/home`
+
+**Resposta:**
+
+```json
+{
+  "message": "API de Inferência de Imagens está rodando!"
+}
+```
+
+---
+
+## 📊 Arquitetura dos Modelos
+
+### Modelo 1: CNN Customizada (SoybeanCNN)
+
+**Características:**
+- Arquitetura simples com 3 camadas convolucionais
+- Rápida e leve
+- Entrada: 224x224x3 (RGB)
+- Saída: 5 classes
+
+**Arquivo:** `src/models/model.py`
+
+```python
+class SoybeanCNN(nn.Module):
+    # Conv2d -> ReLU -> MaxPool -> ... -> Linear
+```
+
+### Modelo 2: EfficientNet-B0 (Recomendado)
+
+**Características:**
+- Transfer learning com ImageNet pre-treinado
+- Maior precisão (93-96%)
+- Mais rápido que CNNs tradicionais
+- Entrada: 224x224x3 (RGB)
+- Saída: 8 classes (versão com mais tipos)
+
+**Arquivo:** `src/models/model_efficientNet.py`
+
+```python
+model = models.efficientnet_b0(pretrained=True)
+model.classifier[1] = nn.Linear(1280, num_classes)
+```
+
+---
+
+## 🔧 Desenvolvimento
+
+### Treinar Novos Modelos
+
+```bash
+# CNN Customizada
+python src/models/model.py
+
+# EfficientNet
+python src/models/model_efficientNet.py
+
+# Com MLflow para rastreamento
+# (já integrado nos scripts)
+```
+
+### Testar Inferência Standalone
+
+```bash
+python src/models/inference.py
+# OU
+python src/models/inference_efficientNet.py
+```
+
+### Estrutura de Dados do Dataset
+
+```
+data/
+└── dataset/
+    ├── Broken/           # Grãos quebrados
+    ├── Immature/         # Grãos imaturos
+    ├── Intact/           # Grãos íntegros
+    ├── Skin-damaged/     # Danos na pele
+    └── Spotted/          # Grãos manchados
+```
+
+### Pré-processamento de Imagens
+
+```bash
+python processa_soja/processador.py
+```
+
+Este script:
+1. Converte para CMYK
+2. Cria máscara binária
+3. Separa grãos individuais
+4. Remove outliers via SSIM
+
+---
+
+## 🐛 Solução de Problemas
+
+### ❌ Erro: "ModuleNotFoundError: No module named 'backend'"
+
+**Solução:**
+- Garanta que está no diretório raiz do projeto
+- Reative o ambiente virtual:
+  ```bash
+  env\Scripts\activate  # Windows
+  source env/bin/activate  # Linux/Mac
+  ```
+
+### ❌ Erro: "Connection refused" ao conectar Frontend-Backend
+
+**Solução:**
+- Verifique se ambos os servidores estão rodando
+- Backend deve estar em `http://127.0.0.1:8001`
+- Frontend enviará requisições para esse endpoint
+- Verifique se CORS está habilitado
+
+### ❌ Erro: "Arquivo de pesos não encontrado (.pth)"
+
+**Solução:**
+- Coloque os arquivos `.pth` em `models/`
+- Ou treine os modelos:
+  ```bash
+  python src/models/model_efficientNet.py
+  ```
+
+### ❌ CUDA não encontrado (apenas aviso, pode usar CPU)
+
+**Mensagem:**
+```
+RuntimeError: No CUDA runtime found
+```
+
+**É normal!** O sistema irá usar CPU automaticamente. Para GPU:
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+### ❌ Porta 5173 ou 8001 já em uso
+
+**Solução:**
+```bash
+# Frontend em porta diferente
+cd frontend
+npm run dev -- --port 3000
+
+# Backend em porta diferente
+uvicorn backend.main:app --reload --port 8002
+```
+
+---
+
+## 📝 Variáveis de Ambiente
+
+Crie um arquivo `.env` na raiz (opcional):
+
+```
+# Backend
+BACKEND_PORT=8001
+MODEL_PATH=./models
+
+# Frontend
+VITE_API_URL=http://127.0.0.1:8001
+```
+
+---
+
+## 🎯 Casos de Uso
+
+### Uso Comercial
+- Triagem automática de grãos em silos
+- Controle de qualidade em fábricas
+- Certificação de exportação
+
+### Uso Acadêmico
+- Pesquisa em visão computacional
+- Benchmark de modelos CNN
+- Dataset de treinamento
+
+### Uso Agrícola
+- Monitoramento de colheita
+- Análise pós-colheita
+- Rastreabilidade de lotes
+
+---
+
+## 📚 Referências e Documentação
+
+- [FastAPI Docs](https://fastapi.tiangolo.com/)
+- [React Docs](https://react.dev/)
+- [PyTorch Docs](https://pytorch.org/)
+- [Radix UI Components](https://www.radix-ui.com/)
+- [shadcn/ui](https://ui.shadcn.com/)
+
+---
+
+## 📄 Licença
+
+Este projeto contém dados e modelos proprietários. Uso restrito conforme termos definidos.
+
+---
+
+## 🤝 Suporte
+
+Se encontrar problemas:
+
+1. Verifique a seção **Solução de Problemas**
+2. Verifique os logs do backend/frontend
+3. Leia as documentações em `backend/README.md` e `frontend/README.md`
+4. Abra uma issue no repositório
+
+---
+
+## 📋 Checklist de Instalação
+
+```
+✅ Python 3.10+ instalado
+✅ Node.js 18+ instalado
+✅ requirements.txt instalado (pip install -r requirements.txt)
+✅ npm install executado em /frontend
+✅ Backend rodando em http://127.0.0.1:8001
+✅ Frontend rodando em http://localhost:5173
+✅ Modelos .pth em /models
+✅ Interface acessível e respondendo
+```
+
+---
+
+**Desenvolvido para classificação automatizada de grãos de soja** 🌱
+
+Versão 1.0 | Última atualização: 2025-01-18
