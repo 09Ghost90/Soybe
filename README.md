@@ -589,4 +589,4 @@ Se encontrar problemas:
 
 **Desenvolvido para classificação automatizada de grãos de soja** 🌱
 
-Versão 1.0 | Última atualização: 2025-01-18
+Versão 1.0 | Última atualização: 2025-02-08
