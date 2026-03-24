@@ -5,9 +5,17 @@ import { InputModeSelector } from "./components/InputModeSelector";
 import { FileUploader } from "./components/FileUploader";
 import { ClassificationResults, ClassificationResult } from "./components/ClassificationResults";
 import { Button } from "./components/ui/button";
-import { Component, Loader2Icon, SproutIcon, StopCircleIcon, Trash } from "lucide-react";
+import { Loader2Icon, SproutIcon, StopCircleIcon, Trash } from "lucide-react";
 import { toast } from "sonner";
 import { handleClassify } from "./components/ModelPipeline";
+
+type ApiResultItem = {
+  index?: number;
+  filename?: string;
+  classification?: string;
+  confidence?: number;
+  model_used?: string;
+};
 
 // Estado global da tela
 function App() {
@@ -57,23 +65,25 @@ function App() {
       
       const data = await handleClassify(selectedModel, selectedFiles, controller.signal);
 
-      const sortedData = data.sort((a: any, b: any) => a.index - b.index);
+      const sortedData = data.sort((a: ApiResultItem, b: ApiResultItem) => (a.index ?? 0) - (b.index ?? 0));
 
       console.log("Data:", sortedData);
 
       // Resposta do backend estruturada
-      const transformedResults = sortedData.map((item: any, idx: number) => {
-        // Extrai o número do filename (ex: "Broken-32/997.jpg" → 997)
-        const fileNumber = parseInt(item.filename.split('/').pop()?.split('.')[0] || '0');
-        
-        // Encontra o arquivo correspondente em selectedFiles
-        const correspondingFile = selectedFiles.find((f: File) => {
-          const fNumber = parseInt(f.name.split('/').pop()?.split('.')[0] || '0');
-          return fNumber === fileNumber;
-        });
+      const transformedResults = sortedData.map((item: ApiResultItem) => {
+        const indexFromApi = item.index ?? -1;
+
+        // Mapeamento principal: usa o índice original enviado pelo backend.
+        let correspondingFile = indexFromApi >= 0 ? selectedFiles[indexFromApi] : undefined;
+
+        // Fallback para cenários sem índice: compara apenas o basename do arquivo.
+        if (!correspondingFile && item.filename) {
+          const responseBaseName = item.filename.split("/").pop() ?? item.filename;
+          correspondingFile = selectedFiles.find((f: File) => f.name === responseBaseName);
+        }
 
         if (!correspondingFile) {
-          console.warn(`Arquivo ${item.filename} não encontrado em selectedFiles`);
+          console.warn(`Arquivo ${item.filename ?? "desconhecido"} não encontrado em selectedFiles`);
           return null;
         }
 
