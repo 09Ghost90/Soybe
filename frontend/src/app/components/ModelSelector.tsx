@@ -10,7 +10,8 @@ interface ModelSelectorProps {
 
 export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const models = [
-    { id: "EfficientNetB0", name: "EfficientNet-B0 (Precisão: 93.1%)" },
+    { id: "EfficientNetB0", name: "EfficientNet-B0 (Mais veloz)" },
+    { id: "EfficientNetB7", name: "EfficientNet-B7 (Maior Precisão)" },
   ];
 
   // Implementação de envio é feita no ModelPipeline.tsx [HandleClassify] -> chamada pela App.tsx

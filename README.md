@@ -62,10 +62,8 @@ SoyNet/
 │
 ├── 📁 src/                              # Scripts ML/Training (Python)
 │   ├── models/
-│   │   ├── model.py                     # CNN customizada
-│   │   ├── model_best.py                # Versão otimizada
-│   │   ├── model_efficientNet.py        # EfficientNet-B0
-│   │   └── inference.py                 # Inferência standalone
+│   │   ├── model_efficientNet.py        # Treino EfficientNet-B7
+│   │   └── inference_efficientNet.py    # Inferência standalone EfficientNet
 │   └── visualization/
 │       └── graphic.py                   # Gráficos de métricas
 │
@@ -163,19 +161,17 @@ cd ..
 Os arquivos de pesos dos modelos (`.pth`) devem ser colocados em `models/`:
 
 ```
+backend/network/models/
+└── efficientnet.pth                    # EfficientNet-B0
+
 models/
-├── soybean_model_full[4].pth          # CNN customizada
-├── efficientnet_base_lr0-001_bs32.pth # EfficientNet-B0
-└── soybean_model_efficientnet.pth     # EfficientNet alternativo
+└── soybean_model_efficientnet_b7.pth  # EfficientNet-B7 (opcional neste caminho)
 ```
 
 Se os modelos não existirem, treine-os executando:
 
 ```bash
-# CNN customizada
-python src/models/model.py
-
-# EfficientNet-B0
+# EfficientNet-B7
 python src/models/model_efficientNet.py
 ```
 
@@ -232,7 +228,8 @@ Acesse [http://localhost:5173](http://localhost:5173) no navegador.
 
 Na seção **"Configuração da Análise"**, escolha o modelo de IA:
 
-- **EfficientNet-B0** (recomendado) - Melhor balance entre velocidade e precisão
+- **EfficientNet-B0** - Mais veloz
+- **EfficientNet-B7** - Maior precisão
 
 ### Passo 3: Escolher Modo de Entrada
 
@@ -279,7 +276,7 @@ Para cada imagem, você verá:
 **Parâmetros:**
 
 ```
-model_name: string   # Nome do modelo ("EfficientNetB0")
+model_name: string   # Nome do modelo ("EfficientNetB0" ou "EfficientNetB7")
 files: file[]        # Uma ou mais imagens
 ```
 
@@ -373,36 +370,30 @@ console.log(results);
 
 ## 📊 Arquitetura dos Modelos
 
-### Modelo 1: CNN Customizada (SoybeanCNN)
-
-**Características:**
-- Arquitetura simples com 3 camadas convolucionais
-- Rápida e leve
-- Entrada: 224x224x3 (RGB)
-- Saída: 5 classes
-
-**Arquivo:** `src/models/model.py`
-
-```python
-class SoybeanCNN(nn.Module):
-    # Conv2d -> ReLU -> MaxPool -> ... -> Linear
-```
-
-### Modelo 2: EfficientNet-B0 (Recomendado)
+### Modelo 1: EfficientNet-B0
 
 **Características:**
 - Transfer learning com ImageNet pre-treinado
 - Maior precisão (93-96%)
 - Mais rápido que CNNs tradicionais
 - Entrada: 224x224x3 (RGB)
-- Saída: 8 classes (versão com mais tipos)
+- Saída: 5 classes
 
-**Arquivo:** `src/models/model_efficientNet.py`
+**Pesos:** `backend/network/models/efficientnet.pth`
 
 ```python
 model = models.efficientnet_b0(pretrained=True)
 model.classifier[1] = nn.Linear(1280, num_classes)
 ```
+
+### Modelo 2: EfficientNet-B7
+
+**Características:**
+- Maior precisão (com custo computacional mais alto)
+- Entrada: 600x600x3 (RGB)
+- Saída: 5 classes
+
+**Arquivos:** `src/models/model_efficientNet.py` e `src/models/inference_efficientNet.py`
 
 ---
 
@@ -411,9 +402,6 @@ model.classifier[1] = nn.Linear(1280, num_classes)
 ### Treinar Novos Modelos
 
 ```bash
-# CNN Customizada
-python src/models/model.py
-
 # EfficientNet
 python src/models/model_efficientNet.py
 
@@ -424,8 +412,6 @@ python src/models/model_efficientNet.py
 ### Testar Inferência Standalone
 
 ```bash
-python src/models/inference.py
-# OU
 python src/models/inference_efficientNet.py
 ```
 
@@ -433,12 +419,12 @@ python src/models/inference_efficientNet.py
 
 ```
 data/
-└── dataset/
-    ├── Broken/           # Grãos quebrados
-    ├── Immature/         # Grãos imaturos
-    ├── Intact/           # Grãos íntegros
-    ├── Skin-damaged/     # Danos na pele
-    └── Spotted/          # Grãos manchados
+└── processed/
+  ├── Broken soybeans/           # Grãos quebrados
+  ├── Immature soybeans/         # Grãos imaturos
+  ├── Intact soybeans/           # Grãos íntegros
+  ├── Skin-damaged soybeans/     # Danos na pele
+  └── Spotted soybeans/          # Grãos manchados
 ```
 
 ### Pré-processamento de Imagens

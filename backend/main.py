@@ -1,6 +1,7 @@
 import os
 import re
 from fastapi import FastAPI, Response, UploadFile, File, Form
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 from backend.schemas import InferenceResponse
@@ -36,7 +37,10 @@ async def inferencia(
             break
 
         contents = await f.read()
-        prediction = run_inference(model_name, contents)
+        try:
+            prediction = run_inference(model_name, contents)
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         # Lista de resultados para cada imagem enviada
         results.append({

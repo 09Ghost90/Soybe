@@ -8,11 +8,43 @@ from sklearn.metrics import confusion_matrix
 import torchvision
 import torchvision.transforms as T
 from torchvision.datasets import ImageFolder
-from torchvision.transforms import RandAugment
+from torchvision.models import EfficientNet_B7_Weights
 from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import numpy as np
+
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ModuleNotFoundError:
+    SummaryWriter = None
+
+
+def configure_runtime() -> tuple[torch.device, int, bool, bool, int]:
+    """Configura device e paralelismo para CPU/GPU com foco em estabilidade de RAM."""
+    cpu_threads = os.cpu_count() or 1
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+        torch.set_float32_matmul_precision("high")
+        print(f"Usando CUDA: {torch.cuda.get_device_name(0)}")
+    else:
+        torch.set_num_threads(cpu_threads)
+        torch.set_num_interop_threads(max(1, cpu_threads // 2))
+        print(f"CUDA indisponivel. Usando CPU com {cpu_threads} threads logicas.")
+
+    # Em CPU com 16GB, muitos workers aumentam muito o uso de RAM.
+    num_workers = min(4, max(1, cpu_threads // 4)) if device.type == "cpu" else min(8, cpu_threads)
+    pin_memory = device.type == "cuda"
+    persistent_workers = device.type == "cuda" and num_workers > 0
+
+    # Prefetch baixo para reduzir picos de memória dos workers.
+    prefetch_factor = 1 if num_workers > 0 else 2
+
+    print(f"DataLoader workers: {num_workers}")
+    print(f"prefetch_factor: {prefetch_factor}")
+
+    return device, num_workers, pin_memory, persistent_workers, prefetch_factor
 
 # # Implementando metricas da matriz de confusão
 # import sklearn
@@ -20,29 +52,39 @@ import numpy as np
 
 # Classificação Supervisionada de Imagens de Soja usando CNN
 
-# TensorBoard
-writer = SummaryWriter()
+# TensorBoard opcional
+writer = SummaryWriter() if SummaryWriter is not None else None
 
 # Hiperparâmetros
-in_channels = 3
-batch_size = 32
+batch_size = 8
 num_epochs = 20
 num_class = 5 # Broken, Immature, Intact, Skin-damaged, Spotted
 patience = 5
 best_val_loss = float('inf')
 epochs_no_improve = 0
 learning_rate = 1e-4
-PATH = "./models/soybean_model_efficientnet.pth"
-data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/dataset"))
+PATH = "./models/soybean_model_efficientnet_b7.pth"
+data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/processed"))
+device, num_workers, pin_memory, persistent_workers, prefetch_factor = configure_runtime()
+
+# Em CPU integrada/16GB, B7 com entrada 600x600 exige batch menor para não estourar RAM.
+if device.type == "cpu":
+    batch_size = 1
+    print("CPU mode: batch_size ajustado para 1 para evitar crash de memória.")
 
 data_transforms = T.Compose([
-    T.Resize((224,224)),
+    T.Resize((600, 600)),
     T.RandomHorizontalFlip(),
     T.RandomRotation(15),
     T.ToTensor(),
-    T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
 image_dataset = ImageFolder(root=data_root, transform=data_transforms)
+
+if len(image_dataset.classes) != num_class:
+    raise ValueError(
+        f"num_class={num_class}, mas o dataset possui {len(image_dataset.classes)} classes: {image_dataset.classes}"
+    )
 
 train_size = int(0.8 * len(image_dataset))
 val_size = int(0.1 * len(image_dataset))
@@ -50,15 +92,39 @@ test_size = len(image_dataset) - train_size - val_size
 train_dataset, val_dataset, test_dataset = random_split(image_dataset, [train_size, val_size, test_size])
 
 # Loader -> Remover gargalo da CPU em preparar os dados
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) # Embaralha os dados
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False) # Não embaralha os dados
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False) # Não embaralha os dados
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers,
+    prefetch_factor=prefetch_factor if num_workers > 0 else None,
+) # Embaralha os dados
+val_loader = DataLoader(
+    val_dataset,
+    batch_size=batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers,
+    prefetch_factor=prefetch_factor if num_workers > 0 else None,
+) # Não embaralha os dados
+test_loader = DataLoader(
+    test_dataset,
+    batch_size=batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers,
+    prefetch_factor=prefetch_factor if num_workers > 0 else None,
+) # Não embaralha os dados
 
-# Modelo EfficientNet pré-treinado
-model = torchvision.models.efficientnet_b0(pretrained=True)
+# Modelo EfficientNet-B7 pré-treinado
+weights = EfficientNet_B7_Weights.IMAGENET1K_V1
+model = torchvision.models.efficientnet_b7(weights=weights)
 num_features = model.classifier[1].in_features
 model.classifier[1] = nn.Linear(num_features, num_class)  # Ajusta a camada final
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
 criterion = nn.CrossEntropyLoss()
@@ -68,18 +134,24 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 def train_model(num_epochs):
     best_val_loss = float('inf')
     epochs_no_improve = 0
+    use_amp = device.type == "cuda"
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
 
         for data, targets in tqdm(train_loader):
-            data, targets = data.to(device), targets.to(device)
+            data = data.to(device, non_blocking=pin_memory)
+            targets = targets.to(device, non_blocking=pin_memory)
             optimizer.zero_grad()
-            outputs = model(data)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+            with torch.autocast(device_type=device.type, enabled=use_amp):
+                outputs = model(data)
+                loss = criterion(outputs, targets)
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             running_loss += loss.item()
 
         epoch_train_loss = running_loss / len(train_loader)
@@ -89,16 +161,18 @@ def train_model(num_epochs):
         val_loss = 0.0
         with torch.no_grad():
             for data, targets in val_loader:
-                data, targets = data.to(device), targets.to(device)
+                data = data.to(device, non_blocking=pin_memory)
+                targets = targets.to(device, non_blocking=pin_memory)
                 outputs = model(data)
                 loss = criterion(outputs, targets)
                 val_loss += loss.item()
 
         epoch_val_loss = val_loss / len(val_loader)
 
-        # Logs para TensorBoard
-        writer.add_scalar("Loss/Treino", epoch_train_loss, epoch)
-        writer.add_scalar("Loss/Validação", epoch_val_loss, epoch)
+        # Logs para TensorBoard (quando disponível)
+        if writer is not None:
+            writer.add_scalar("Loss/Treino", epoch_train_loss, epoch)
+            writer.add_scalar("Loss/Validação", epoch_val_loss, epoch)
 
         print(f"Epoch {epoch+1}, Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f}")
 
@@ -113,7 +187,8 @@ def train_model(num_epochs):
                 print(f"Early stopping na epoch {epoch+1}")
                 break
 
-    writer.close()
+    if writer is not None:
+        writer.close()
 
 if __name__ == "__main__":
     start = time.time()
@@ -136,8 +211,8 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         for images, labels in test_loader:
-            images = images.to(device)
-            labels = labels.to(device)
+            images = images.to(device, non_blocking=pin_memory)
+            labels = labels.to(device, non_blocking=pin_memory)
             outputs = model(images)
             _, preds = torch.max(outputs, 1)
 
