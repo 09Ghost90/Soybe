@@ -6,9 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 from backend.schemas import InferenceResponse
 from backend.services.inference_service import run_inference
+from backend.routes.training_routes import router as training_router
 from starlette.requests import Request
 
 app = FastAPI()
+app.include_router(training_router, prefix="/training", tags=["training"])
 
 app.add_middleware(
     CORSMiddleware,

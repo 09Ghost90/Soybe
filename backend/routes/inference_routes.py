@@ -9,6 +9,7 @@ from torchvision import models
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 WORKSPACE_ROOT = os.path.abspath(os.path.join(PROJECT_ROOT, "../"))
 
+# Construiremos um dict global padrão para legados
 classes = {
     0: "Broken soybeans",
     1: "Immature soybeans",
@@ -16,9 +17,6 @@ classes = {
     3: "Skin-damaged soybeans",
     4: "Spotted soybeans"
 }
-
-# Configurações
-num_classes = 5 # Broken, Immature, Intact, Skin-damaged, Spotted
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if device.type == "cuda":
@@ -37,22 +35,45 @@ MODEL_CONFIGS = {
     "EfficientNetB0": {
         "builder": models.efficientnet_b0,
         "input_size": 224,
+        "classifier_attr": "classifier",  # model.classifier[1]
         "weight_candidates": [
             os.path.join(PROJECT_ROOT, "network/models/efficientnet.pth"),
-            os.path.join(PROJECT_ROOT, "network/models/efficientnet_b0.pth"),
+            os.path.join(PROJECT_ROOT, "models/efficientnet_b0.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_efficientnetb0.pth"),
         ],
     },
     "EfficientNetB7": {
         "builder": models.efficientnet_b7,
         "input_size": 600,
+        "classifier_attr": "classifier",  # model.classifier[1]
         "weight_candidates": [
             os.path.join(PROJECT_ROOT, "network/models/efficientnet_b7.pth"),
             os.path.join(WORKSPACE_ROOT, "models/soybean_model_efficientnet_b7.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_efficientnetb7.pth"),
+        ],
+    },
+    "ResNet50": {
+        "builder": models.resnet50,
+        "input_size": 224,
+        "classifier_attr": "fc",  # model.fc (camada única)
+        "weight_candidates": [
+            os.path.join(PROJECT_ROOT, "network/models/resnet50.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_resnet50.pth"),
+        ],
+    },
+    "MobileNetV3": {
+        "builder": models.mobilenet_v3_large,
+        "input_size": 224,
+        "classifier_attr": "classifier",  # model.classifier[-1]
+        "weight_candidates": [
+            os.path.join(PROJECT_ROOT, "network/models/mobilenet_v3.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_mobilenet_v3.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_mobilenetv3.pth"),
         ],
     },
 }
 
-_MODEL_CACHE: dict[str, tuple[torch.nn.Module, transforms.Compose]] = {}
+_MODEL_CACHE: dict[str, tuple[torch.nn.Module, transforms.Compose, dict[int, str]]] = {}
 
 
 def _build_transform(input_size: int) -> transforms.Compose:
@@ -70,22 +91,67 @@ def _resolve_weight_path(weight_candidates: list[str]) -> str:
     raise FileNotFoundError(f"Nenhum peso encontrado. Caminhos testados: {weight_candidates}")
 
 
-def _load_model(model_name: str) -> tuple[torch.nn.Module, transforms.Compose]:
-    config = MODEL_CONFIGS[model_name]
-    model = config["builder"](weights=None)
-    model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, num_classes)
+def _replace_final_layer(model: torch.nn.Module, classifier_attr: str, num_out: int):
+    """Substitui a última camada do modelo para o número de classes do projeto.
 
+    - ResNet: model.fc (nn.Linear direto)
+    - EfficientNet / MobileNet: model.classifier[1] ou model.classifier[-1] (nn.Sequential)
+    """
+    if classifier_attr == "fc":
+        in_features = model.fc.in_features
+        model.fc = torch.nn.Linear(in_features, num_out)
+    else:
+        # EfficientNet → classifier[1], MobileNet → classifier[-1]
+        layer = getattr(model, classifier_attr)
+        last_idx = -1
+        # Percorre para encontrar a última Linear
+        for idx in range(len(layer) - 1, -1, -1):
+            if isinstance(layer[idx], torch.nn.Linear):
+                last_idx = idx
+                break
+        in_features = layer[last_idx].in_features
+        layer[last_idx] = torch.nn.Linear(in_features, num_out)
+
+
+def _load_model(model_name: str) -> tuple[torch.nn.Module, transforms.Compose, dict[int, str]]:
+    config = MODEL_CONFIGS[model_name]
     path = _resolve_weight_path(config["weight_candidates"])
     print(f"Carregando pesos de {path} para {model_name}...")
-    model.load_state_dict(torch.load(path, map_location=device))
+    
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    
+    local_num_classes = 5
+    local_classes = classes
+
+    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+        if "num_classes" in checkpoint:
+            local_num_classes = checkpoint["num_classes"]
+        if "class_names" in checkpoint:
+            local_classes = {i: name for i, name in enumerate(checkpoint["class_names"])}
+    else:
+        state_dict = checkpoint
+        # Infer shape from weights to support older raw checkpoints
+        if config["classifier_attr"] == "fc" and "fc.weight" in state_dict:
+            local_num_classes = state_dict["fc.weight"].shape[0]
+        elif config["classifier_attr"] == "classifier":
+            for k in reversed(list(state_dict.keys())):
+                if "classifier" in k and "weight" in k:
+                    local_num_classes = state_dict[k].shape[0]
+                    break
+
+    model = config["builder"](weights=None)
+    _replace_final_layer(model, config["classifier_attr"], local_num_classes)
+
+    model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()
 
     transform = _build_transform(config["input_size"])
-    return model, transform
+    return model, transform, local_classes
 
 
-def get_model_and_transform(model_name: str) -> tuple[torch.nn.Module, transforms.Compose]:
+def get_model_and_transform(model_name: str) -> tuple[torch.nn.Module, transforms.Compose, dict[int, str]]:
     if model_name not in MODEL_CONFIGS:
         modelos = ", ".join(MODEL_CONFIGS.keys())
         raise ValueError(f"Modelo {model_name} não suportado. Opções: {modelos}")
@@ -99,10 +165,9 @@ def get_model_and_transform(model_name: str) -> tuple[torch.nn.Module, transform
 def classify_image(image_bytes: bytes, model_name: str) -> dict:
     """
     Recebe bytes da imagem e retorna a classificação
-
     Bytes -> Numpy array -> Imagem PIL
     """
-    model, transform = get_model_and_transform(model_name)
+    model, transform, model_classes = get_model_and_transform(model_name)
 
     nparr = np.frombuffer(image_bytes, np.uint8)
     img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -128,5 +193,5 @@ def classify_image(image_bytes: bytes, model_name: str) -> dict:
     return {
         "predicted_class": predicted_class,
         "confidence": float(confidence),
-        "class_name": classes[predicted_class]
+        "class_name": model_classes.get(predicted_class, f"Classe {predicted_class}")
     }

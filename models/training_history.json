@@ -1,0 +1,45 @@
+[
+    {
+        "timestamp": "2026-03-28T14:54:38.470490",
+        "model_name": "MobileNetV3",
+        "dataset_name": "light_dataset_2",
+        "config": {
+            "model_name": "MobileNetV3",
+            "data_path": "/home/ghost/Documents/Soybe/data/light_dataset_2",
+            "batch_size": 32,
+            "num_epochs": 20,
+            "learning_rate": 0.0001,
+            "patience": 5,
+            "train_split": 0.8,
+            "val_split": 0.1
+        },
+        "result": {
+            "type": "training_complete",
+            "total_time": 882.4,
+            "best_val_loss": 0.000453,
+            "accuracy": 92.31,
+            "classification_report": [
+                {
+                    "class": "SkinDamaged",
+                    "precision": 100.0,
+                    "recall": 87.5,
+                    "f1": 93.33,
+                    "support": 16
+                },
+                {
+                    "class": "Spotted",
+                    "precision": 83.33,
+                    "recall": 100.0,
+                    "f1": 90.91,
+                    "support": 10
+                }
+            ],
+            "model_path": "/home/ghost/Documents/Soybe/models/soybean_model_mobilenetv3.pth",
+            "num_classes": 2,
+            "class_names": [
+                "SkinDamaged",
+                "Spotted"
+            ]
+        }
+    }
+]

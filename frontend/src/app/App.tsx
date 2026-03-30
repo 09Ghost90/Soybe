@@ -4,6 +4,9 @@ import ModelSelector from "./components/ModelSelector";
 import { InputModeSelector } from "./components/InputModeSelector";
 import { FileUploader } from "./components/FileUploader";
 import { ClassificationResults, ClassificationResult } from "./components/ClassificationResults";
+import { Navbar } from "./components/Navbar";
+import { Dashboard } from "./components/Dashboard";
+import { TrainingDashboard } from "./components/TrainingDashboard";
 import { Button } from "./components/ui/button";
 import { Loader2Icon, SproutIcon, StopCircleIcon, Trash } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +22,7 @@ type ApiResultItem = {
 
 // Estado global da tela
 function App() {
+  const [activeTab, setActiveTab] = useState<"classifier" | "dashboard" | "training">("classifier");
   const [selectedModel, setSelectedModel] = useState(""); // Modelo treinado selecionado
   const [inputMode, setInputMode] = useState<"single" | "batch">("single"); // Modo de entrada de arquivos
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // Arquivos selecionados pelo usuário
@@ -141,72 +145,79 @@ const clearSelection = () => {
   // Manipula o clique no botão de classificar (handleClassify movida para ModelPipeline.tsx)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-3">
-            <SproutIcon className="w-12 h-12 text-green-700" />
-            <h1 className="text-green-800">Sistema de Classificação de Grãos de Soja</h1>
-          </div>
-          <p className="text-gray-600">
-            Utilize inteligência artificial para classificar a qualidade dos grãos de soja
-          </p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex flex-col">
+      <Navbar activeTab={activeTab} onTabChange={setActiveTab} hasResults={results.length > 0} />
+      <div className="flex-1 p-6">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {activeTab === "classifier" ? (
+            <>
+              {/* Header */}
+              <div className="text-center space-y-4 my-8">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="p-3 bg-white rounded-2xl shadow-sm border border-green-100">
+                    <SproutIcon className="w-10 h-10 text-green-600" />
+                  </div>
+                  <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-800 to-emerald-600 tracking-tight">Soybe System</h1>
+                </div>
+                <p className="text-lg text-gray-600 max-w-2xl mx-auto font-medium">
+                  Visão Computacional e Inteligência Artificial para classificação de qualidade dos grãos de soja.
+                </p>
+              </div>
 
         {/* Configuration Panel */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Configuração da Análise</CardTitle>
-            <CardDescription>
-              Configure o modelo e selecione as imagens para classificação
+        <Card className="bg-white/80 backdrop-blur-xl border border-white max-w-4xl mx-auto shadow-xl rounded-3xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-green-600 to-emerald-800 text-white p-8">
+            <CardTitle className="text-2xl">Painel de Avaliação</CardTitle>
+            <CardDescription className="text-green-50 font-medium">
+              Configure o motor e faça o envio das imagens para análise
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6, flex items-center">
+          <CardContent className="space-y-8 p-8">
+            <div className="grid md:grid-cols-2 gap-8 items-start">
               <ModelSelector value={selectedModel} onChange={setSelectedModel} />
               <InputModeSelector value={inputMode} onChange={setInputMode} />
             </div>
 
-              <div className="flex justify-end">
-                <Button className="w-auto" onClick={clearSelection}>
-                  <Trash className="w-4 h-4 mr-2" />
-                  Limpar Seleção
-                </Button>
-              </div>
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-gray-700">Arquivos para Análise</h3>
+                {selectedFiles.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={clearSelection} className="text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-200">
+                    <Trash className="w-4 h-4 mr-2" />
+                    Limpar Seleção ({selectedFiles.length})
+                  </Button>
+                )}
+              </div>
               <FileUploader mode={inputMode} onFilesSelected={handleFilesSelected} />
-              {selectedFiles.length > 0 && (
-                <p className="text-sm text-gray-600 text-center">
-                  {/* Quantidade de arquivos selecionados */}
-                  {selectedFiles.length} arquivo(s) selecionado(s)
-                </p>
-              )}
             </div>
 
-            <Button
-              onClick={runClassification}
-              disabled={isClassifying || !selectedModel || selectedFiles.length === 0}
-              className="w-full"
-              size="lg"
-            >
-              {isClassifying ? (
-                <>
-                  <Loader2Icon className="w-5 h-5 mr-2 animate-spin" />
-                  Classificando...
-                </>
-              ) : (
-                "Iniciar Classificação"
-              )}
-            </Button>
+            <div className="flex gap-4 pt-4">
+              <Button
+                onClick={runClassification}
+                disabled={isClassifying || !selectedModel || selectedFiles.length === 0}
+                className="flex-1 h-14 text-lg bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/30 transition-all rounded-xl font-bold"
+              >
+                {isClassifying ? (
+                  <>
+                    <Loader2Icon className="w-6 h-6 mr-2 animate-spin" />
+                    Processando Imagens...
+                  </>
+                ) : (
+                  "Iniciar Classificação Automática"
+                )}
+              </Button>
 
-            <Button
-              onClick={stopClassification}
-              disabled={!isClassifying}
-              className="w-full bg-red-600 hover:bg-red-800">
-              <StopCircleIcon /> Parar Classificação
-            </Button>
+              {isClassifying && (
+                <Button
+                  onClick={stopClassification}
+                  className="h-14 px-8 bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all rounded-xl font-bold text-white flex gap-2"
+                >
+                  <StopCircleIcon className="w-6 h-6" /> Cancelar
+                </Button>
+              )}
+            </div>
 
           </CardContent>
         </Card>
@@ -219,7 +230,13 @@ const clearSelection = () => {
             </CardContent>
           </Card>
         )}
-        
+            </>
+          ) : activeTab === "dashboard" ? (
+            <Dashboard results={results} />
+          ) : (
+            <TrainingDashboard />
+          )}
+        </div>
       </div>
     </div>
   );

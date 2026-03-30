@@ -17,3 +17,15 @@ class InferenceResponse(BaseModel):
     classification: str
     confidence: float
     model_used: str
+
+
+# Configuração de treinamento enviada pelo frontend
+class TrainingConfig(BaseModel):
+    model_name: str
+    data_path: str
+    batch_size: int = 16
+    num_epochs: int = 20
+    learning_rate: float = 1e-4
+    patience: int = 5
+    train_split: float = 0.8
+    val_split: float = 0.1

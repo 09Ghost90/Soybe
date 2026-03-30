@@ -12,6 +12,8 @@ export async function handleClassify(model: string, files: File[], signal: Abort
     files.forEach((f) => formData.append("files", f));
 
     // Chama o endpoint de inferência do backend
+    // Implementando VITE_API_URL
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
     const response = await fetch("http://localhost:8001/inferencia", {
         method: "POST",
         body: formData,
@@ -22,6 +24,6 @@ export async function handleClassify(model: string, files: File[], signal: Abort
         const text = await response.text();
         throw new Error(`Erro na requisição: ${response.status} ${text}`);
     }
-    
+
     return response.json();
 }
