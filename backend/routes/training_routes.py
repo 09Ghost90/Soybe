@@ -177,6 +177,30 @@ async def cancel_training():
     training_manager.cancel()
     return {"status": "cancelling"}
 
+@router.post("/pause")
+async def pause_training():
+    """Pausa o treinamento em andamento."""
+    if not training_manager.is_training:
+        raise HTTPException(status_code=400, detail="Nenhum treinamento.")
+    training_manager.pause()
+    return {"status": "paused"}
+
+@router.post("/resume")
+async def resume_training():
+    """Retoma o treinamento pausado."""
+    if not training_manager.is_training:
+        raise HTTPException(status_code=400, detail="Nenhum treinamento.")
+    training_manager.resume()
+    return {"status": "resumed"}
+
+@router.post("/stop_early")
+async def stop_early_training():
+    """Finaliza o treinamente antecipadamente."""
+    if not training_manager.is_training:
+        raise HTTPException(status_code=400, detail="Nenhum treinamento.")
+    training_manager.stop_early()
+    return {"status": "stopping_early"}
+
 @router.get("/history")
 async def get_training_history():
     """Retorna o log de métricas e histórico de modelos já treinados"""

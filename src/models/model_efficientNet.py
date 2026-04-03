@@ -72,14 +72,36 @@ if device.type == "cpu":
     batch_size = 1
     print("CPU mode: batch_size ajustado para 1 para evitar crash de memória.")
 
-data_transforms = T.Compose([
-    T.Resize((600, 600)),
+class TransformSubset(torch.utils.data.Dataset):
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+        
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
+        
+    def __len__(self):
+        return len(self.subset)
+
+train_transforms = T.Compose([
+    T.RandomResizedCrop(600, scale=(0.8, 1.0)),
     T.RandomHorizontalFlip(),
     T.RandomRotation(15),
+    T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
     T.ToTensor(),
-    T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+    T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+])
 
-image_dataset = ImageFolder(root=data_root, transform=data_transforms)
+val_transforms = T.Compose([
+    T.Resize((600, 600)),
+    T.ToTensor(),
+    T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+])
+
+image_dataset = ImageFolder(root=data_root, transform=None)
 
 if len(image_dataset.classes) != num_class:
     raise ValueError(
@@ -89,7 +111,19 @@ if len(image_dataset.classes) != num_class:
 train_size = int(0.8 * len(image_dataset))
 val_size = int(0.1 * len(image_dataset))
 test_size = len(image_dataset) - train_size - val_size
-train_dataset, val_dataset, test_dataset = random_split(image_dataset, [train_size, val_size, test_size])
+
+train_dataset_raw, val_dataset_raw, test_dataset_raw = random_split(image_dataset, [train_size, val_size, test_size])
+
+train_dataset = TransformSubset(train_dataset_raw, transform=train_transforms)
+val_dataset = TransformSubset(val_dataset_raw, transform=val_transforms)
+test_dataset = TransformSubset(test_dataset_raw, transform=val_transforms)
+
+train_indices = train_dataset_raw.indices
+targets = [image_dataset.targets[i] for i in train_indices]
+class_counts = np.bincount(targets, minlength=num_class)
+weights = 1.0 / np.sqrt(class_counts + 1e-8)
+weights = (weights / np.sum(weights)) * num_class
+class_weights = torch.FloatTensor(weights).to(device)
 
 # Loader -> Remover gargalo da CPU em preparar os dados
 train_loader = DataLoader(
@@ -127,7 +161,7 @@ num_features = model.classifier[1].in_features
 model.classifier[1] = nn.Linear(num_features, num_class)  # Ajusta a camada final
 model = model.to(device)
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(weight=class_weights)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Treinamento do Modelo
@@ -136,59 +170,102 @@ def train_model(num_epochs):
     epochs_no_improve = 0
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    
+    history = {'train_loss': [], 'val_loss': []}
+    min_delta = 0.001
+    
+    best_path = PATH.replace('.pth', '_best.pth')
+    last_path = PATH.replace('.pth', '_last.pth')
 
-    for epoch in range(num_epochs):
-        model.train()
-        running_loss = 0.0
+    try:
+        for epoch in range(num_epochs):
+            model.train()
+            running_loss = 0.0
 
-        for data, targets in tqdm(train_loader):
-            data = data.to(device, non_blocking=pin_memory)
-            targets = targets.to(device, non_blocking=pin_memory)
-            optimizer.zero_grad()
-            with torch.autocast(device_type=device.type, enabled=use_amp):
-                outputs = model(data)
-                loss = criterion(outputs, targets)
-
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            running_loss += loss.item()
-
-        epoch_train_loss = running_loss / len(train_loader)
-
-        # validação
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for data, targets in val_loader:
+            for data, targets in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
                 data = data.to(device, non_blocking=pin_memory)
                 targets = targets.to(device, non_blocking=pin_memory)
-                outputs = model(data)
-                loss = criterion(outputs, targets)
-                val_loss += loss.item()
+                optimizer.zero_grad()
+                with torch.autocast(device_type=device.type, enabled=use_amp):
+                    outputs = model(data)
+                    loss = criterion(outputs, targets)
 
-        epoch_val_loss = val_loss / len(val_loader)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                running_loss += loss.item()
 
-        # Logs para TensorBoard (quando disponível)
+            epoch_train_loss = running_loss / len(train_loader)
+
+            # Validação
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for data, targets in val_loader:
+                    data = data.to(device, non_blocking=pin_memory)
+                    targets = targets.to(device, non_blocking=pin_memory)
+                    outputs = model(data)
+                    loss = criterion(outputs, targets)
+                    val_loss += loss.item()
+
+            epoch_val_loss = val_loss / len(val_loader)
+            
+            history['train_loss'].append(epoch_train_loss)
+            history['val_loss'].append(epoch_val_loss)
+
+            # Logs para TensorBoard
+            if writer is not None:
+                writer.add_scalar("Loss/Treino", epoch_train_loss, epoch)
+                writer.add_scalar("Loss/Validação", epoch_val_loss, epoch)
+                
+            loss_diff = epoch_train_loss - epoch_val_loss
+            print(f"Epoch {epoch+1}, Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f} (Diff: {loss_diff:.4f})")
+
+            # Salvar último modelo (checkpoint de recuperação)
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_loss': epoch_val_loss,
+                'best_val_loss': best_val_loss
+            }, last_path)
+
+            # Early stopping check
+            if epoch_val_loss < (best_val_loss - min_delta):
+                best_val_loss = epoch_val_loss
+                epochs_no_improve = 0
+                
+                # Salvar melhor modelo
+                torch.save({
+                    'epoch': epoch + 1,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_val_loss': best_val_loss
+                }, best_path)
+                print(f"⭐ Novo melhor modelo salvo! Val Loss reduziu para {best_val_loss:.4f}")
+            else:
+                epochs_no_improve += 1
+                if epochs_no_improve >= patience:
+                    print(f"🛑 Early stopping ativado na época {epoch+1}. Sem melhorias estruturais de {min_delta} nas ultimas {patience} épocas.")
+                    break
+
+    except KeyboardInterrupt:
+        print("\n⚠️ Treinamento interrompido pelo usuário (Ctrl+C)!")
+        interrupted_path = PATH.replace('.pth', '_interrupted.pth')
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'best_val_loss': best_val_loss,
+            'reason': 'keyboard_interrupt'
+        }, interrupted_path)
+        print(f"💾 Último estado salvo com segurança em: {interrupted_path}")
+
+    finally:
         if writer is not None:
-            writer.add_scalar("Loss/Treino", epoch_train_loss, epoch)
-            writer.add_scalar("Loss/Validação", epoch_val_loss, epoch)
-
-        print(f"Epoch {epoch+1}, Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f}")
-
-        # early stopping
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            epochs_no_improve = 0
-            torch.save(model.state_dict(), PATH)
-        else:
-            epochs_no_improve += 1
-            if epochs_no_improve >= patience:
-                print(f"Early stopping na epoch {epoch+1}")
-                break
-
-    if writer is not None:
-        writer.close()
+            writer.close()
+            
+    return history
 
 if __name__ == "__main__":
     start = time.time()
@@ -197,7 +274,13 @@ if __name__ == "__main__":
     print(end - start)
 
     # Melhores pesos salvos
-    model.load_state_dict(torch.load(PATH, map_location=device))
+    best_path = PATH.replace('.pth', '_best.pth')
+    if os.path.exists(best_path):
+        checkpoint = torch.load(best_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Pesos do melhor modelo (Epoca {checkpoint.get('epoch', '?')}) carregados para avaliação.")
+    else:
+        print(f"Aviso: {best_path} não encontrado, avaliando modelo no estado atual.")
     model.eval()
 
     # Avaliação do Modelo -> Garante verificar as métricas após o treinamento.

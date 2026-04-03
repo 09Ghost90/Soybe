@@ -116,13 +116,38 @@ def _build_model(model_name: str, num_classes: int, device: torch.device):
     return model.to(device)
 
 
-def _build_transforms(input_size: int):
-    """Transforms de treinamento com data augmentation."""
+class TransformSubset(torch.utils.data.Dataset):
+    """Garante que Apply/Transforms ocorram *após* carregar do ImageFolder base."""
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+        
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
+        
+    def __len__(self):
+        return len(self.subset)
+
+
+def _build_train_transforms(input_size: int):
+    """Transforms agressivos exclusivos para treinamento (lida com desbalanceamento)."""
     return T.Compose([
-        T.Resize((input_size, input_size)),
+        T.RandomResizedCrop(input_size, scale=(0.8, 1.0)),
         T.RandomHorizontalFlip(),
         T.RandomRotation(15),
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        T.ToTensor(),
+        T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
+
+
+def _build_val_transforms(input_size: int):
+    """Transforms rígidos sem distorções para Teste e Validação."""
+    return T.Compose([
+        T.Resize((input_size, input_size)),
         T.ToTensor(),
         T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
@@ -186,8 +211,10 @@ class TrainingManager:
     def __init__(self):
         self._lock = threading.Lock()
         self._cancel_event = threading.Event()
+        self._stop_early_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.is_training = False
+        self.is_paused = False
         self.last_result: Optional[dict] = None
 
     # ── public API ──
@@ -205,6 +232,8 @@ class TrainingManager:
                 raise RuntimeError("Já existe um treinamento em andamento.")
 
             self._cancel_event.clear()
+            self._stop_early_event.clear()
+            self.is_paused = False
             self.is_training = True
             self.last_result = None
 
@@ -216,12 +245,28 @@ class TrainingManager:
         self._thread.start()
 
     def cancel(self):
-        """Sinaliza cancelamento do treinamento."""
+        """Sinaliza cancelamento do treinamento (Descarta)."""
+        self.is_paused = False
         self._cancel_event.set()
+
+    def pause(self):
+        self.is_paused = True
+
+    def resume(self):
+        self.is_paused = False
+
+    def stop_early(self):
+        """Finaliza e salva o estado atual antes das épocas terminarem."""
+        self.is_paused = False
+        self._stop_early_event.set()
 
     @property
     def status(self) -> str:
         if self.is_training:
+            if self.is_paused:
+                return "paused"
+            if self._stop_early_event.is_set():
+                return "stopping"
             return "training"
         if self.last_result is not None:
             return "completed"
@@ -270,8 +315,8 @@ class TrainingManager:
         })
 
         # ── Dataset ──
-        transforms = _build_transforms(cfg["input_size"])
-        dataset = ImageFolder(root=data_path, transform=transforms)
+        # Carrega as imagens puras (sem transformações globais prejudiciais pra Val)
+        dataset = ImageFolder(root=data_path, transform=None)
         num_classes = len(dataset.classes)
         class_names = dataset.classes
 
@@ -285,9 +330,27 @@ class TrainingManager:
                 f"Dataset muito pequeno ({total} imagens) para os splits configurados."
             )
 
-        train_ds, val_ds, test_ds = random_split(
+        train_ds_raw, val_ds_raw, test_ds_raw = random_split(
             dataset, [train_size, val_size, test_size]
         )
+
+        train_transforms = _build_train_transforms(cfg["input_size"])
+        val_transforms = _build_val_transforms(cfg["input_size"])
+
+        train_ds = TransformSubset(train_ds_raw, transform=train_transforms)
+        val_ds = TransformSubset(val_ds_raw, transform=val_transforms)
+        test_ds = TransformSubset(test_ds_raw, transform=val_transforms)
+
+        # ── Class Weights ──
+        callback({"type": "status", "message": "Calculando os pesos das classes..."})
+        train_indices = train_ds_raw.indices
+        targets = [dataset.targets[i] for i in train_indices]
+        class_counts = np.bincount(targets, minlength=num_classes)
+        
+        # Suaviza para evitar explodir em classes quase vazias: 1 / sqrt(N)
+        weights = 1.0 / np.sqrt(class_counts + 1e-8)
+        weights = (weights / np.sum(weights)) * num_classes
+        class_weights = torch.FloatTensor(weights).to(device)
 
         loader_kwargs = dict(
             num_workers=num_workers,
@@ -316,7 +379,7 @@ class TrainingManager:
 
         # ── Model ──
         model = _build_model(model_name, num_classes, device)
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
         use_amp = device.type == "cuda"
@@ -337,6 +400,12 @@ class TrainingManager:
         has_saved_checkpoint = False
 
         for epoch in range(num_epochs):
+
+            while self.is_paused:
+                if self._cancel_event.is_set() or self._stop_early_event.is_set():
+                    break
+                time.sleep(0.5)
+
             if self._cancel_event.is_set():
                 callback({
                     "type": "training_cancelled",
@@ -345,11 +414,20 @@ class TrainingManager:
                     "checkpoint_path": save_path if has_saved_checkpoint else None,
                 })
                 return
+                
+            if self._stop_early_event.is_set():
+                callback({"type": "status", "message": f"Treino finalizado antecipadamente. Salvando da época {epoch}..."})
+                break
 
             model.train()
             running_loss = 0.0
 
             for batch_idx, (data, targets) in enumerate(train_loader):
+                while self.is_paused:
+                    if self._cancel_event.is_set() or self._stop_early_event.is_set():
+                        break
+                    time.sleep(0.5)
+
                 if self._cancel_event.is_set():
                     callback({
                         "type": "training_cancelled",
@@ -358,6 +436,9 @@ class TrainingManager:
                         "checkpoint_path": save_path if has_saved_checkpoint else None,
                     })
                     return
+                
+                if self._stop_early_event.is_set():
+                    break
 
                 data = data.to(device, non_blocking=pin_memory)
                 targets = targets.to(device, non_blocking=pin_memory)
@@ -384,6 +465,10 @@ class TrainingManager:
                     })
 
             epoch_train_loss = running_loss / total_batches
+            
+            if self._stop_early_event.is_set():
+                callback({"type": "status", "message": f"Batches interrompidos. Finalizando e avaliando..."})
+                break
 
             # ── Validação ──
             model.eval()

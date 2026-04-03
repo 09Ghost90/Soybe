@@ -1,4 +1,4 @@
-﻿# 🌱 SoyNet - Sistema de Classificação de Grãos de Soja
+# 🌱 SoyNet - Sistema de Classificação de Grãos de Soja
 
 Sistema web completo para classificação automatizada de grãos de soja utilizando modelos de inteligência artificial. Combina uma API robusta em **FastAPI** (Python) com uma interface moderna em **React/TypeScript**.
 
@@ -262,6 +262,29 @@ Para cada imagem, você verá:
 | **Categoria** | Tipo de grão (Tipo 1, 2, 3, 4) |
 | **Qualidade** | Excelente / Boa / Regular / Ruim |
 | **Defeitos** | Lista de problemas detectados |
+
+---
+
+## 🎛️ Treinamento e Fine-Tuning Funcional
+
+A principal novidade da arquitetura de produção do SoyNet é o pipeline de treinamento guiado integralmente via frontend React acoplado dinamicamente com MLOps nas dependências internas PyTorch.
+
+### Treinar e Criar Novas Redes Customizadas
+1. Na Dashboard de Treinamento, escolha a baseline a ser aprimorada (`MobileNet`, `ResNet`, `EfficientNet`).
+2. Defina Hiperparâmetros como **Batch Size**, **Learning Rate** e proporção (Splits T/V) entre as frações que avaliarão contra falsos positivos.
+3. Tratamento Dinâmico: A injeção balanceadora de classe ($1/\sqrt{n}$) mitiga instantaneamente gargalos de datasets assimétricos desiguais entre si.
+4. Feedback em tempo de execução: Um Loader interativo calcula simultaneamente o erro (Loss Difference) separando a variação gráfica.
+
+### Controle Tático por Threading e Hardware
+Como treinamentos profundos exigem alocação integral da CPU/GPU, os recursos foram isolados:
+- ⏸️ **Pausar / Retomar**: A qualquer momento pare o disparo de Tensores caso haja pico externo do hardware e retriangule para Retomar posteriormente, sem fechar a sessão WebSocket.
+- 💾 **Finalizar & Salvar (Stop Early)**: Precisa queimar etapas e parar de esperar o limitador atingir o teto de *paciência*? Você intercepta a thread e empurra imediatamente a IA a cruzar sua métrica da "época congelada", montando avaliativos em base no que ela compreendeu até aquele exato milissegundo.
+
+### Histórico Científico de Resultados
+Resultados da validação de teste do Fine-Tuning jamais se perdem e permanecem alvos num Banco `JSON` servidos de ponta-a-ponta:
+- Gráficos Lineares **Curva ROC e AUC %**.
+- **Matriz de Confusão em Heatmap**.
+- Cálculo analítico multiclasse para Métricas precisas de Regressão Logística (`F1-Score, Precision, Recall e Support`).
 
 ---
 
