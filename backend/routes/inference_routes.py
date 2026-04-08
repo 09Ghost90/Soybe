@@ -113,9 +113,16 @@ def _replace_final_layer(model: torch.nn.Module, classifier_attr: str, num_out: 
         layer[last_idx] = torch.nn.Linear(in_features, num_out)
 
 
-def _load_model(model_name: str) -> tuple[torch.nn.Module, transforms.Compose, dict[int, str]]:
+def _load_model(model_name: str, weight_filename: str = None) -> tuple[torch.nn.Module, transforms.Compose, dict[int, str]]:
     config = MODEL_CONFIGS[model_name]
-    path = _resolve_weight_path(config["weight_candidates"])
+    
+    if weight_filename:
+        path = os.path.join(WORKSPACE_ROOT, "models", weight_filename)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Arquivo especificado não encontrado: {path}")
+    else:
+        path = _resolve_weight_path(config["weight_candidates"])
+        
     print(f"Carregando pesos de {path} para {model_name}...")
     
     checkpoint = torch.load(path, map_location=device, weights_only=False)
@@ -151,23 +158,25 @@ def _load_model(model_name: str) -> tuple[torch.nn.Module, transforms.Compose, d
     return model, transform, local_classes
 
 
-def get_model_and_transform(model_name: str) -> tuple[torch.nn.Module, transforms.Compose, dict[int, str]]:
+def get_model_and_transform(model_name: str, weight_filename: str = None) -> tuple[torch.nn.Module, transforms.Compose, dict[int, str]]:
     if model_name not in MODEL_CONFIGS:
         modelos = ", ".join(MODEL_CONFIGS.keys())
         raise ValueError(f"Modelo {model_name} não suportado. Opções: {modelos}")
 
-    if model_name not in _MODEL_CACHE:
-        _MODEL_CACHE[model_name] = _load_model(model_name)
+    cache_key = f"{model_name}_{weight_filename}" if weight_filename else model_name
 
-    return _MODEL_CACHE[model_name]
+    if cache_key not in _MODEL_CACHE:
+        _MODEL_CACHE[cache_key] = _load_model(model_name, weight_filename)
+
+    return _MODEL_CACHE[cache_key]
 
 # Função chamada pelo Inference_Service (endpoint)
-def classify_image(image_bytes: bytes, model_name: str) -> dict:
+def classify_image(image_bytes: bytes, model_name: str, weight_filename: str = None) -> dict:
     """
     Recebe bytes da imagem e retorna a classificação
     Bytes -> Numpy array -> Imagem PIL
     """
-    model, transform, model_classes = get_model_and_transform(model_name)
+    model, transform, model_classes = get_model_and_transform(model_name, weight_filename)
 
     nparr = np.frombuffer(image_bytes, np.uint8)
     img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)

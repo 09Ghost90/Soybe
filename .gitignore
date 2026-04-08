@@ -68,6 +68,7 @@ data/
 models/*.pth
 models/*.pt
 models/*.onnx
+models/*.json
 *.h5
 *.pkl
 *.pickle

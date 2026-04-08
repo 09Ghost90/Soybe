@@ -1,14 +1,18 @@
 // Array files comporta multiplas imagens
-export async function handleClassify(model: string, files: File[], signal: AbortSignal) {
+export async function handleClassify(model: string, weight_filename: string | null, files: File[], signal: AbortSignal) {
     if (!model || files.length === 0) {
         throw new Error("Modelo ou arquivos ausentes");
     }
 
     console.log("Modelo selecionado:", model);
+    if (weight_filename) console.log("Versão selecionada:", weight_filename);
     console.log("Arquivos para classificação:", files);
 
     const formData = new FormData();
     formData.append("model_name", model);
+    if (weight_filename) {
+        formData.append("weight_filename", weight_filename);
+    }
     files.forEach((f) => formData.append("files", f));
 
     // Chama o endpoint de inferência do backend

@@ -24,6 +24,7 @@ type ApiResultItem = {
 function App() {
   const [activeTab, setActiveTab] = useState<"classifier" | "dashboard" | "training">("classifier");
   const [selectedModel, setSelectedModel] = useState(""); // Modelo treinado selecionado
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null); // Versão do modelo selecionado
   const [inputMode, setInputMode] = useState<"single" | "batch">("single"); // Modo de entrada de arquivos
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // Arquivos selecionados pelo usuário
   const [results, setResults] = useState<ClassificationResult[]>([]); // Resultados da classificação
@@ -67,7 +68,7 @@ function App() {
 
       */
       
-      const data = await handleClassify(selectedModel, selectedFiles, controller.signal);
+      const data = await handleClassify(selectedModel, selectedVersion, selectedFiles, controller.signal);
 
       const sortedData = data.sort((a: ApiResultItem, b: ApiResultItem) => (a.index ?? 0) - (b.index ?? 0));
 
@@ -174,7 +175,7 @@ const clearSelection = () => {
           </CardHeader>
           <CardContent className="space-y-8 p-8">
             <div className="grid md:grid-cols-2 gap-8 items-start">
-              <ModelSelector value={selectedModel} onChange={setSelectedModel} />
+              <ModelSelector value={selectedModel} onChange={setSelectedModel} version={selectedVersion} onVersionChange={setSelectedVersion} />
               <InputModeSelector value={inputMode} onChange={setInputMode} />
             </div>
 

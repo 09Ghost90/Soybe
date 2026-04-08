@@ -29,6 +29,7 @@ async def options_inferencia():
 async def inferencia(
     request: Request,
     model_name: str = Form(...),
+    weight_filename: str = Form(None),
     files: List[UploadFile] = File(...)
 ):
     results = []
@@ -40,7 +41,7 @@ async def inferencia(
 
         contents = await f.read()
         try:
-            prediction = run_inference(model_name, contents)
+            prediction = run_inference(model_name, contents, weight_filename)
         except (ValueError, FileNotFoundError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

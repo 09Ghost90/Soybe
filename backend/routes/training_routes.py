@@ -68,6 +68,8 @@ async def list_models():
     """Lista os modelos disponíveis para treinamento."""
     models = []
     for key, cfg in TRAINING_MODEL_CONFIGS.items():
+        if cfg.get("hidden"):
+            continue
         models.append({
             "id": key,
             "name": key,
@@ -213,3 +215,18 @@ async def get_training_history():
             return json.load(f)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao ler histórico: {exc}")
+
+@router.get("/model_versions/{model_name}")
+async def get_model_versions(model_name: str):
+    """Retorna a lista de arquivos .pth treinados disponíveis."""
+    if not os.path.exists(MODELS_SAVE_DIR):
+        return []
+    
+    prefix = f"soybean_model_{model_name.lower()}"
+    files = []
+    for f in os.listdir(MODELS_SAVE_DIR):
+        if f.startswith(prefix) and f.endswith(".pth"):
+            files.append(f)
+            
+    files.sort(reverse=True)
+    return files

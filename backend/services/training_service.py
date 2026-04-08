@@ -21,6 +21,7 @@ import torchvision.transforms as T
 import torchvision
 from torchvision.models import (
     EfficientNet_B0_Weights,
+    EfficientNet_B2_Weights,
     EfficientNet_B7_Weights,
     ResNet50_Weights,
     MobileNet_V3_Large_Weights,
@@ -35,6 +36,14 @@ TRAINING_MODEL_CONFIGS = {
         "weights": EfficientNet_B0_Weights.IMAGENET1K_V1,
         "input_size": 224,
         "classifier_type": "sequential",  # model.classifier[1]
+        "default_batch": 16,
+        "cpu_batch": 4,
+    },
+    "EfficientNetB2": {
+        "builder": torchvision.models.efficientnet_b2,
+        "weights": EfficientNet_B2_Weights.IMAGENET1K_V1,
+        "input_size": 260,
+        "classifier_type": "sequential",
         "default_batch": 16,
         "cpu_batch": 4,
     },
@@ -391,10 +400,11 @@ class TrainingManager:
         total_batches = len(train_loader)
         start_time = time.time()
 
-        # Caminho para salvar pesos
+        # Caminho para salvar pesos com timestamp
         os.makedirs(MODELS_SAVE_DIR, exist_ok=True)
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = os.path.join(
-            MODELS_SAVE_DIR, f"soybean_model_{model_name.lower()}.pth"
+            MODELS_SAVE_DIR, f"soybean_model_{model_name.lower()}_{timestamp_str}.pth"
         )
 
         has_saved_checkpoint = False

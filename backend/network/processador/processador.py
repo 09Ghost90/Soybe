@@ -75,11 +75,12 @@ def separar_graos(imagem_tratada_path, imagem_original_path, tipo_grao):
     mascara_geral = cv2.imread(imagem_tratada_path, cv2.IMREAD_GRAYSCALE)
     original = ler_imagem(imagem_original_path)
     if mascara_geral is None or original is None:
-        return 0
+        return 0, 0
 
     contornos, _ = cv2.findContours(mascara_geral, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     nome_base = os.path.splitext(os.path.basename(imagem_original_path))[0]
     contador_objetos = 0
+    max_dim_local = 0
 
     for i, contorno in enumerate(contornos):
         if cv2.contourArea(contorno) < 100:
@@ -99,9 +100,39 @@ def separar_graos(imagem_tratada_path, imagem_original_path, tipo_grao):
         output_path = os.path.join(dir_graos_temp, f"{nome_base}_obj_{i+1}.png")
         cv2.imwrite(output_path, grao_transparente)
         contador_objetos += 1
+        max_dim_local = max(max_dim_local, w, h)
 
     print(f"    [INFO] {contador_objetos} objetos recortados e salvos temporariamente.")
-    return contador_objetos
+    return contador_objetos, max_dim_local
+
+def pad_and_resize(image, global_max_dim, target_size=224):
+    """
+    Coloca a imagem em um canvas quadrado do tamanho de global_max_dim (preenchimento transparente)
+    para centralizar de forma proporcional, depois redimensiona para target_size x target_size.
+    Assume que a imagem e BGRA (4 canais).
+    """
+    h, w = image.shape[:2]
+    # Cria canvas transparente BGRA global_max_dim x global_max_dim
+    canvas = np.zeros((global_max_dim, global_max_dim, 4), dtype=np.uint8)
+    
+    # Evita erros se a dimensao for maior por arredondamentos anormais
+    if h > global_max_dim or w > global_max_dim:
+        scale = global_max_dim / float(max(h, w))
+        image = cv2.resize(image, (int(w*scale), int(h*scale)), interpolation=cv2.INTER_AREA)
+        h, w = image.shape[:2]
+        
+    start_y = (global_max_dim - h) // 2
+    start_x = (global_max_dim - w) // 2
+    
+    # Assegura que image tem 4 canais
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
+        
+    canvas[start_y:start_y+h, start_x:start_x+w] = image
+    
+    # Redimensiona mantendo a nova proporcao quadrada no tamanho final
+    resized = cv2.resize(canvas, (target_size, target_size), interpolation=cv2.INTER_AREA)
+    return resized
 
 def ssim_masked(imgA, imgB):
     """Calcula SSIM apenas sobre os pixels visíveis (alpha > 0)."""
@@ -154,9 +185,9 @@ def ssim_masked(imgA, imgB):
         fallback_score = max(0.0, 1.0 - (diff / 255.0))
         return float(fallback_score)
 
-def achar_outliers(tipo_grao, grao_base_controle, debug=False):
-    """Filtra por tamanho e similaridade (SSIM) usando máscaras alfa."""
-    print(f"  [Passo 3/3] Verificando outliers na categoria '{tipo_grao}'...")
+def achar_outliers(tipo_grao, grao_base_controle, global_max_dim, debug=False):
+    """Filtra por tamanho e similaridade (SSIM), faz pad & resize finais."""
+    print(f"  [Passo 3/3] Verificando outliers e formatando na categoria '{tipo_grao}'...")
 
     dir_origem = os.path.join(RECORTADOS_DIR, tipo_grao, "_temp")
     dir_destino_outliers = os.path.join(OUTLIERS_DIR, tipo_grao)
@@ -200,8 +231,12 @@ def achar_outliers(tipo_grao, grao_base_controle, debug=False):
             move(caminho_origem, os.path.join(dir_destino_outliers, nome_arquivo))
             if debug: print(f"    [Outlier] {nome_arquivo} movido (score={score:.3f}).")
         else:
-            # Se não for outlier, move para a pasta final de grãos bons
-            move(caminho_origem, os.path.join(dir_destino_bons, nome_arquivo))
+            # Se nao for outlier, formata o grao (Preenchimento proporcional)
+            grao_padronizado = pad_and_resize(grao_atual, global_max_dim, target_size=224)
+            # Salva no dir final
+            cv2.imwrite(os.path.join(dir_destino_bons, nome_arquivo), grao_padronizado)
+            # Remove o temporario
+            os.remove(caminho_origem)
 
     # Tenta remover a pasta temporária, que agora deve estar vazia
     try:
@@ -211,8 +246,8 @@ def achar_outliers(tipo_grao, grao_base_controle, debug=False):
 
 # --- 3. FUNÇÃO PRINCIPAL DE EXECUÇÃO ---
 def main():
-    """Orquestra todo o processo de forma automatizada."""
-    print("--- INICIANDO PROCESSAMENTO DE IMAGENS DE SOJA (VERSÃO FINAL) ---")
+    """Orquestra todo o processo de forma automatizada em duas etapas."""
+    print("--- INICIANDO PROCESSAMENTO DE IMAGENS DE SOJA (VERSÃO COM PADDING E SCALING PROPORCIONAL) ---")
 
     caminho_base = os.path.join(REFERENCIA_DIR, "grao_base.png")
     if not os.path.exists(caminho_base):
@@ -226,10 +261,14 @@ def main():
         print(f"\n[ERRO] O diretório '1_imagens_originais' não existe ou está vazio.")
         return
 
+    # A primeira fase vai mapear todos os recortes brutos a fim de estabelecer a escala referencial
+    global_max_dim = max(grao_base_controle.shape[:2]) # comeca assumindo as dimensoes da ref
+    print("\n--- FASE 1: Extraindo grãos isolados e determinando maior dimensão ---")
+    
     for tipo_grao in os.listdir(ORIGINAIS_DIR):
         dir_categoria = os.path.join(ORIGINAIS_DIR, tipo_grao)
         if os.path.isdir(dir_categoria):
-            print(f"\nProcessando categoria: '{tipo_grao}'")
+            print(f"\nProcessando extracoes da categoria: '{tipo_grao}'")
             
             arquivos_processados = set()
             todos_os_arquivos = os.listdir(dir_categoria)
@@ -243,12 +282,19 @@ def main():
                 imagem_original_path = os.path.join(dir_categoria, nome_imagem)
                 imagem_tratada_path = tratar_imagem(imagem_original_path)
                 if imagem_tratada_path:
-                    separar_graos(imagem_tratada_path, imagem_original_path, tipo_grao)
+                    obj, m_dim = separar_graos(imagem_tratada_path, imagem_original_path, tipo_grao)
+                    global_max_dim = max(global_max_dim, m_dim)
                 
                 arquivos_processados.add(nome_base)
+                
+    print(f"\n--- FASE 2: Filtrando Outliers e Padronizando ---")
+    print(f"Maior dimensao identificada (*canvas padronizado*): {global_max_dim} px")
             
-            # Chama a função de outlier aprimorada
-            achar_outliers(tipo_grao, grao_base_controle, debug=True) # Ativei o debug para vermos os scores
+    for tipo_grao in os.listdir(ORIGINAIS_DIR):
+        dir_categoria = os.path.join(ORIGINAIS_DIR, tipo_grao)
+        if os.path.isdir(dir_categoria):
+            # Chama a funcao de outlier aprimorada, agora com pad_and_resize (target 224x224)
+            achar_outliers(tipo_grao, grao_base_controle, global_max_dim, debug=True)
 
     print("\n--- PROCESSAMENTO FINALIZADO ---")
 
