@@ -58,6 +58,7 @@ out/
 .ipynb_checkpoints
 *.ipynb
 .jupyter/
+notebooks/
 
 # 🤖 MLflow
 mlruns/
@@ -187,6 +188,3 @@ env/
 venv/
 ENV/
 .venv
-
-# Pasta src (modelos e scripts de treinamento)
-src/
