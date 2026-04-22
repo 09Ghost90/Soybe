@@ -38,8 +38,9 @@ import {
   SaveIcon,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:8001/training";
-const WS_URL = "ws://localhost:8001/training/ws";
+const API_HOST = (import.meta.env.VITE_API_URL || "http://localhost:8001").replace(/\/$/, "");
+const API_BASE = `${API_HOST}/training`;
+const WS_URL = `${API_HOST.replace(/^http/, "ws")}/training/ws`;
 
 // ──────────────────── Types ────────────────────
 
