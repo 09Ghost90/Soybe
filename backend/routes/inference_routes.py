@@ -42,6 +42,16 @@ MODEL_CONFIGS = {
             os.path.join(WORKSPACE_ROOT, "models/soybean_model_efficientnetb0.pth"),
         ],
     },
+    "EfficientNetB3": {
+        "builder": models.efficientnet_b3,
+        "input_size": 300,
+        "classifier_attr": "classifier",  # model.classifier[1]
+        "weight_candidates": [
+            os.path.join(PROJECT_ROOT, "network/models/efficientnet_b3.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_efficientnet_b3.pth"),
+            os.path.join(WORKSPACE_ROOT, "models/soybean_model_efficientnetb3.pth"),
+        ],
+    },
     "EfficientNetB7": {
         "builder": models.efficientnet_b7,
         "input_size": 600,
